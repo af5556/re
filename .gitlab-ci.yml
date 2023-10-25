@@ -1,0 +1,133 @@
+include:
+- local: '.gitlab-ci-job-templates.yaml'
+
+variables: # TODO create variables in the dda generator
+  ARTIFACTS_REGISTRY_REPO: trd-nightly-registry
+  PYTHON_VERSION: '3.8-slim'
+  POETRY_VERSION: '1.1.13'
+  PYTHONPATH: "./python/"
+  KANIKO_VERSION: "v1.6.0"
+  ARTIFACTS_REGISTRY_URL: "europe-west1-docker.pkg.dev/dda-artifact-registries-f8b0/trd-nightly-registry"
+  CLOUD_SDK_VERSION: "alpine"
+  PROCESSING_PROJECT: "trd-processing-dev-f86c"
+  DATAFLOW_ARTIFACTS_BUCKET: "trd-processing-dev-f86c-dataflow-artifacts"
+  DATA_PROCESSING_SERVICE_ACCOUNT: "dataflow-etl-sa-dev@trd-processing-dev-f86c.iam.gserviceaccount.com"
+  DEFAULT_REGION: "europe-west1"
+
+image: python:${PYTHON_VERSION}
+
+before_script:
+  - echo "using :$(which python)"  # For debugging
+
+stages:
+  - prepare
+  - integrate
+  - test
+  - build-and-deliver
+
+cache:
+  paths:
+    - venv/
+
+create-env:
+  stage: prepare
+  tags:
+    - trd-dev-data-processing-runner
+  extends:
+    - .common-create-env
+  only:
+    changes:
+      - python/**/*
+
+styling-check:
+  stage: integrate
+  tags:
+    - trd-dev-data-processing-runner
+  extends:
+    - .common-styling-check
+  needs:
+    - create-env
+  only:
+    changes:
+      - python/**/*
+
+formatting-check:
+  stage: integrate
+  tags:
+    - trd-dev-data-processing-runner
+  extends:
+    - .common-formatting-check
+  needs:
+    - create-env
+  only:
+    changes:
+      - python/**/*
+
+typing-check:
+  stage: integrate
+  tags:
+    - trd-dev-data-processing-runner
+  extends:
+    - .common-typing-check
+  needs:
+    - create-env
+  only:
+    changes:
+      - python/**/*
+
+unit-tests:
+  stage: test
+  tags:
+    - trd-dev-data-processing-runner
+  extends:
+    - .common-unit-tests
+  needs:
+    - create-env
+    - formatting-check
+    - styling-check
+    - typing-check
+  only:
+    changes:
+      - python/**/*
+
+#load_raw_deployment:
+#  stage: build-and-deliver
+#  trigger:
+#    include:
+#      - local: devops/load_raw/cicd.yaml
+#      - local: devops/cicd-template.yaml
+#    strategy: depend
+#  when: manual
+#  allow_failure: true
+
+
+prepare-functions-deploy-jobs:
+  stage: prepare
+  tags:
+    - trd-dev-data-processing-runner
+  variables:
+    CF_PYTHON_VERSION: "38"
+    DATA_PROC_TAG: "trd-dev-data-processing-runner"
+  script:
+    - >-
+      source devops/generate-cloud-functions-deploy-jobs.sh
+      cloud-functions-deploy-jobs.yml
+      $DATA_PROC_TAG
+      $CF_PYTHON_VERSION
+      $PROCESSING_PROJECT
+      $DEFAULT_REGION
+  artifacts:
+      paths:
+      - cloud-functions-deploy-jobs.yml
+
+
+deploy-cloud-functions:
+  stage: build-and-deliver
+  trigger:
+    strategy: depend
+    include:
+      - artifact: cloud-functions-deploy-jobs.yml
+        job: prepare-functions-deploy-jobs
+      - local: devops/cicd-template.yaml
+  when: manual
+  allow_failure: true
