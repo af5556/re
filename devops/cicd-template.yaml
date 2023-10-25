@@ -1,0 +1,90 @@
+.common-dataflow-worker-image:
+  image:
+    name: gcr.io/kaniko-project/executor:${KANIKO_VERSION}-debug
+    entrypoint:
+      - ""
+  script:
+    - echo "BUILDING DATAFLOW WORKER IMAGE WITH VARS :"
+    - echo "CI_PROJECT_DIR = " ${CI_PROJECT_DIR}
+    - echo "ARTIFACTS_REGISTRY_URL = " ${ARTIFACTS_REGISTRY_URL}
+    - echo "IMAGE_NAME = " ${IMAGE_NAME}
+    - echo "CI_COMMIT_SHORT_SHA = " ${CI_COMMIT_SHORT_SHA}
+    - echo "AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN = " ${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}
+    - >-
+      /kaniko/executor
+      --context=${CI_PROJECT_DIR}/python
+      --dockerfile=${CI_PROJECT_DIR}/devops/Dockerfile.worker
+      --destination=${ARTIFACTS_REGISTRY_URL}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+      --destination=${ARTIFACTS_REGISTRY_URL}/${IMAGE_NAME}:latest
+      --cache=true
+      --build-arg=AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN=${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}
+
+.common-deploy-launcher-image:
+  image:
+    name: gcr.io/kaniko-project/executor:${KANIKO_VERSION}-debug
+    entrypoint:
+      - ""
+  script:
+    - echo "BUILDING LAUNCHER IMAGE WITH FOR PIPELINE " ${PIPELINE_NAME}
+    - echo "CI_PROJECT_DIR = " ${CI_PROJECT_DIR}
+    - echo "ARTIFACTS_REGISTRY_URL = " ${ARTIFACTS_REGISTRY_URL}
+    - echo "PIPELINE_NAME = " ${PIPELINE_NAME}
+    - echo "JOB_LAUNCHER_PATH = " ${JOB_LAUNCHER_PATH}
+    - echo "AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN = " ${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}
+    - >-
+      /kaniko/executor
+      --context=${CI_PROJECT_DIR}/python
+      --dockerfile=${CI_PROJECT_DIR}/devops/Dockerfile.launcher
+      --destination=${ARTIFACTS_REGISTRY_URL}/dataflow_${PIPELINE_NAME}_launcher:${CI_COMMIT_SHORT_SHA}
+      --destination=${ARTIFACTS_REGISTRY_URL}/dataflow_${PIPELINE_NAME}_launcher:latest
+      --cache=true
+      --build-arg=JOB_LAUNCHER_PATH=${JOB_LAUNCHER_PATH}
+      --build-arg=AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN=${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}
+
+.common-deploy-dataflow-template:
+  image:
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:${CLOUD_SDK_VERSION}
+  script:
+    - echo "BUILDING DATAFLOW TEMPLATE FOR PIPELINE " ${PIPELINE_NAME}
+    - echo "CI_PROJECT_DIR = " ${CI_PROJECT_DIR}
+    - echo "ARTIFACTS_REGISTRY_URL = " ${ARTIFACTS_REGISTRY_URL}
+    - echo "PIPELINE_NAME = " ${PIPELINE_NAME}
+    - echo "LAUNCHER_TAG" ${LAUNCHER_TAG}
+    - >-
+      gcloud
+      --project=${PROCESSING_PROJECT}
+      dataflow flex-template build gs://${DATAFLOW_ARTIFACTS_BUCKET}/${PIPELINE_NAME}/templates/${CI_COMMIT_SHORT_SHA}/${PIPELINE_NAME}_template.json
+      --image=${ARTIFACTS_REGISTRY_URL}/dataflow_${PIPELINE_NAME}_launcher:${LAUNCHER_TAG}
+      --sdk-language="PYTHON"
+      --metadata-file="${CI_PROJECT_DIR}/python/pipelines/${PIPELINE_NAME}/job-metadata.json"
+
+.common-deploy-configs-on-gcs:
+  image:
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:${CLOUD_SDK_VERSION}
+  script:
+    - echo "PUSHING CONFIGS FOR PIPELINE " ${PIPELINE_NAME}
+    - echo "DATAFLOW_ARTIFACTS_BUCKET = " ${DATAFLOW_ARTIFACTS_BUCKET}
+    - echo "CI_COMMIT_SHORT_SHA = " ${CI_COMMIT_SHORT_SHA}
+    - gsutil cp -r ${LOCAL_CONFIGS_PATH} gs://${DATAFLOW_ARTIFACTS_BUCKET}/${PIPELINE_NAME}/configs/${CI_COMMIT_SHORT_SHA}
+
+.common-deploy-cloudfunctions:
+  image:
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:${CLOUD_SDK_VERSION}
+  script:
+    - echo "FUNCTION NAME" ${FUNCTION_NAME}
+    - echo "FUNCTION PYTHON VERSION" ${CF_PYTHON_VERSION}
+    - echo "DATA_PROCESSING_SERVICE_ACCOUNT" ${DATA_PROCESSING_SERVICE_ACCOUNT}
+    - echo "FUNCTION_SOURCE" ${FUNCTION_SOURCE}
+    - echo "DDA_GCP_PROJECT" ${DDA_GCP_PROJECT}
+    - echo "DEFAULT_REGION" ${DEFAULT_REGION}
+    - >-
+      gcloud functions deploy ${FUNCTION_NAME}
+      --quiet
+      --trigger-http
+      --entry-point=main
+      --memory=2G
+      --runtime=python${CF_PYTHON_VERSION}
+      --service-account=${DATA_PROCESSING_SERVICE_ACCOUNT}
+      --source=${FUNCTION_SOURCE}
+      --project=${DDA_GCP_PROJECT}
+      --region=${DEFAULT_REGION}

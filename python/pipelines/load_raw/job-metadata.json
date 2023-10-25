@@ -1,0 +1,53 @@
+{
+  "name": "Load Raw Pipeline for carcheck",
+  "description": "This is a simple template to be used as a bootstrap project",
+  "parameters": [
+    {
+      "name": "gcs_to_bq_configs",
+      "label": "GCS To BQ Configurations file",
+      "helpText": "Path to the config file of the input output of the pipeline(gcs)"
+    },
+    {
+      "name": "final_columns_transform_configs",
+      "label": "Final Columns Transform Configs",
+      "isOptional": true,
+      "helpText": "Path to the configurations of the columns transformations to apply on the final table"
+    },
+    {
+      "name": "final_rows_filter_configs",
+      "label": "Final Rows Filter Configs",
+      "isOptional": true,
+      "helpText": "Path to the configurations of the rows filtering to apply on the final table"
+    },
+    {
+      "name": "sdk_worker_parallelism",
+      "label": "Number of SDK",
+      "helpText": "Sets the number of SDK workers that will run on each worker node",
+      "isOptional": true,
+      "regexes": [
+        "^[0-9]*[1-9][0-9]*$"
+      ]
+    },
+    {
+      "name": "experiment",
+      "label": "Parameter to indicate the runner to use",
+      "helpText": "If set to 'use_runner_v2' workers will use a custom docker container to run UDF",
+      "isOptional": true,
+      "regexes": [
+        "use_runner_v2"
+      ]
+    },
+    {
+      "name": "worker_harness_container_image",
+      "label": "URI to a docker image",
+      "helpText": "The specified docker image will be pulled by dataflow workers",
+      "isOptional": true
+    },
+    {
+      "name": "autoscaling_algorithm",
+      "label": "Autoscaling algorithm",
+      "helpText": "if THROUGHPUT_BASED",
+      "isOptional": true
+    }
+  ]
+}

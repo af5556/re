@@ -1,0 +1,34 @@
+ARG BASE_IMAGE_TAG=flex_templates_base_image_release_20220704_RC00
+# TODO optimize : use multi-stage - doc https://cloud.google.com/dataflow/docs/guides/templates/configuring-flex-templates
+# BUILD STAGE
+FROM gcr.io/dataflow-templates-base/python38-template-launcher-base:${BASE_IMAGE_TAG}
+
+ARG JOB_LAUNCHER_PATH
+ARG AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN
+ARG POETRY_VERSION=1.1.13
+
+# Save a few bytes (see: https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE)
+ENV PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR .
+
+COPY poetry.lock .
+COPY pyproject.toml .
+COPY pipelines pipelines
+
+RUN pip install poetry==$POETRY_VERSION
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+# GIT AUTH TO INSTALL PRIVATE REPOSITORIES
+RUN apt-get update
+RUN apt-get install -y git
+RUN echo "https://${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}@gitlab.aut.bz" > ${HOME}/.git-credentials \
+  && git config --global credential.helper store \
+  && pip install -r requirements.txt \
+  && rm -rf ${HOME}/.git-credentials
+
+RUN apt-get install -y libffi-dev
+RUN rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONPATH=.
+ENV FLEX_TEMPLATE_PYTHON_PY_FILE=$JOB_LAUNCHER_PATH

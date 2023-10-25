@@ -1,0 +1,44 @@
+ARG PYTHON_VERSION=3.8-slim-buster
+
+# BUILD STAGE
+FROM python:$PYTHON_VERSION as build
+
+ARG POETRY_VERSION=1.1.13
+ARG AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN
+
+# Save a few bytes (see: https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE)
+ENV PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /pipeline
+
+COPY poetry.lock .
+COPY pyproject.toml .
+COPY pipelines /pipeline/pipelines
+
+RUN pip install poetry==$POETRY_VERSION
+RUN poetry config virtualenvs.in-project true
+# GIT AUTH TO INSTALL PRIVATE REPOSITORIES
+RUN apt-get update
+RUN apt-get install -y git
+RUN echo "https://${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}@gitlab.aut.bz" > ${HOME}/.git-credentials \
+  && git config --global credential.helper store \
+  && poetry install --no-dev \
+  && rm -rf ${HOME}/.git-credentials
+
+# TODO optimize doc https://cloud.google.com/dataflow/docs/guides/using-custom-containers
+# RUN STAGE
+#FROM python:$PYTHON_VERSION
+
+#WORKDIR /
+
+#COPY --from=build /pipeline .
+
+# Activate virtualenv
+ENV VIRTUAL_ENV=/pipeline/.venv
+ENV PATH=$VIRTUAL_ENV/bin:$PATH
+
+# Set python path
+ENV PYTHONPATH=/pipeline
+
+COPY --from=apache/beam_python3.8_sdk:2.39.0 /opt/apache/beam /opt/apache/beam
+ENTRYPOINT ["/opt/apache/beam/boot"]
