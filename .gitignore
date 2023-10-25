@@ -1,0 +1,15 @@
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+poetry.toml
