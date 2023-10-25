@@ -1,0 +1,40 @@
+.set_env: &set_env
+  - source venv/bin/activate
+  - cd python
+  - export PYTHONPATH=$(pwd)
+
+.common-create-env:
+  script:
+    - apt-get update
+    - apt-get install -y git
+    - echo "https://${AUTOBIZ_ETL_TOOLS_ACCESS_TOKEN}@gitlab.aut.bz" > ${HOME}/.git-credentials
+    - git config --global credential.helper store
+    - pip install virtualenv
+    - virtualenv venv
+    - *set_env
+    - pip install poetry==${POETRY_VERSION}
+    - poetry install
+  artifacts:
+    paths:
+    - venv
+
+.common-styling-check:
+  script:
+    - *set_env
+    - ../venv/bin/poetry run pylint --fail-under=6 --rcfile .pylintrc ./*
+
+.common-formatting-check:
+  script:
+    - *set_env
+    - ../venv/bin/poetry run black --check .
+
+.common-typing-check:
+  script:
+    - *set_env
+    - ../venv/bin/poetry run mypy --exclude tests --config-file=mypy.ini .
+
+.common-unit-tests:
+  script:
+    - *set_env
+    - ../venv/bin/pip install setuptools
+    - ../venv/bin/poetry run pytest
